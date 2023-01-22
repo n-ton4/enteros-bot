@@ -1,0 +1,55 @@
+# This workflow will install Python dependencies, run tests and lint with a single version of Python
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: Enteros Bot Deployment
+
+on:
+  workflow_dispatch: # Put here!!
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+
+    - name: Copy repository contents via scp
+      uses: appleboy/scp-action@master
+      env:
+        HOST: ${{ secrets.HOST }}
+        USERNAME: ${{ secrets.USERNAME }}
+        PORT: ${{ secrets.PORT }}
+        KEY: ${{ secrets.SSHKEY }}
+      with:
+        source: "."
+        target: "~/enteros-bot"
+
+    - name: Install dependencies
+      run: |
+        if [ -f requirements.txt ]; then pip3 install -r requirements.txt; fi
+        
+    - name: Executing remote command
+      uses: appleboy/ssh-action@master
+      env:
+        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+      with:
+        HOST: ${{ secrets.HOST }}
+        USERNAME: ${{ secrets.USERNAME }}
+        PORT: ${{ secrets.PORT }}
+        KEY: ${{ secrets.SSHKEY }}
+        envs: BOT_TOKEN
+        script: |
+          cd ~/enteros-bot/src
+          pwd
+          ls -la
+          export BOT_TOKEN=$BOT_TOKEN
+          BOT_PID=`ps aux | grep '[p]ython3 enteros_bot.py' | grep -v grep | awk '{print $2}'`
+          if [[ "" !=  "$BOT_PID" ]]; then
+            echo "killing $BOT_PID"
+            kill -9 $BOT_PID
+          fi
+          echo "Starting Enteros Bot"
+          nohup python3 enteros_bot.py main > /dev/null 2>&1 &
